@@ -1,0 +1,12 @@
+[package]
+name = "fallible"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+fallible-core = { path = "../fallible-core" }
+fallible-macro = { path = "../fallible-macro" }
+
+[features]
+default = ["fallible-sim"]
+fallible-sim = []
