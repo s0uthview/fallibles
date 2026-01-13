@@ -77,6 +77,7 @@ fn main() {
     test_policies();
     test_thread_config();
     test_seeded_randomness();
+    test_predicates();
 }
 
 fn test_basic() {
@@ -331,7 +332,7 @@ fn test_thread_config() {
 
 fn test_seeded_randomness() {
     println!("\n=== Testing Seeded Randomness ===\n");
-    
+
     println!("Seed 12345 (run 1):");
     {
         let _guard = fallible_core::with_config(
@@ -350,7 +351,7 @@ fn test_seeded_randomness() {
         }
         println!();
     }
-    
+
     println!("\nSeed 12345 (run 2 - should match run 1):");
     {
         let _guard = fallible_core::with_config(
@@ -369,7 +370,7 @@ fn test_seeded_randomness() {
         }
         println!();
     }
-    
+
     println!("\nSeed 67890 (different seed - different pattern):");
     {
         let _guard = fallible_core::with_config(
@@ -388,7 +389,7 @@ fn test_seeded_randomness() {
         }
         println!();
     }
-    
+
     println!("\nNo seed (uses system entropy - varies each run):");
     {
         let _guard = fallible_core::with_config(
@@ -406,7 +407,7 @@ fn test_seeded_randomness() {
         }
         println!();
     }
-    
+
     println!("\nEnvironment variable seed (FALLIBLE_SEED):");
     {
         let _guard = fallible_core::with_config(
@@ -421,6 +422,125 @@ fn test_seeded_randomness() {
             }
             if (i + 1) % 10 == 0 {
                 print!(" ");
+            }
+        }
+        println!();
+    }
+}
+
+fn test_predicates() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    println!("\n=== Testing Conditional Predicates ===\n");
+
+    println!("Test 1: Predicate with boolean flag");
+    let chaos_enabled = Arc::new(AtomicBool::new(false));
+    let chaos_flag = chaos_enabled.clone();
+
+    {
+        let _guard = fallible_core::with_config(
+            fallible_core::FailureConfig::new()
+                .with_probability(1.0)
+                .when(move || chaos_flag.load(Ordering::Relaxed)),
+        );
+
+        println!("  Predicate is false - should never fail:");
+        for i in 0..5 {
+            match read_config() {
+                Ok(x) => println!("    Attempt {}: succeeded with {}", i, x),
+                Err(_) => println!("    Attempt {}: failed", i),
+            }
+        }
+
+        chaos_enabled.store(true, Ordering::Relaxed);
+        println!("  Predicate is now true - should always fail:");
+        for i in 0..5 {
+            match read_config() {
+                Ok(x) => println!("    Attempt {}: succeeded with {}", i, x),
+                Err(_) => println!("    Attempt {}: failed", i),
+            }
+        }
+    }
+
+    println!("\nTest 2: Predicate based on environment variable");
+    {
+        let _guard = fallible_core::with_config(
+            fallible_core::FailureConfig::new()
+                .with_probability(0.5)
+                .when(|| std::env::var("CHAOS_MODE").is_ok()),
+        );
+
+        println!("  CHAOS_MODE not set - should never fail:");
+        for i in 0..5 {
+            match fetch_data() {
+                Ok(msg) => println!("    Attempt {}: {}", i, msg),
+                Err(_) => println!("    Attempt {}: failed", i),
+            }
+        }
+
+        unsafe { std::env::set_var("CHAOS_MODE", "1"); }
+        println!("  CHAOS_MODE=1 - should fail ~50%:");
+        for _ in 0..10 {
+            match fetch_data() {
+                Ok(_) => print!("."),
+                Err(_) => print!("X"),
+            }
+        }
+        println!();
+        unsafe { std::env::remove_var("CHAOS_MODE"); }
+    }
+
+    println!("\nTest 3: Time-based predicate (only fail during specific window)");
+    {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let _guard = fallible_core::with_config(
+            fallible_core::FailureConfig::new()
+                .with_probability(1.0)
+                .when(|| {
+                    let now = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs();
+                    now % 2 == 0
+                }),
+        );
+
+        println!("  Testing over 2 seconds (fails only on even seconds):");
+        for i in 0..10 {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            let even = now % 2 == 0;
+            match read_config() {
+                Ok(_) => println!("    Attempt {}: succeeded (second: {}, even: {})", i, now, even),
+                Err(_) => println!("    Attempt {}: FAILED (second: {}, even: {})", i, now, even),
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+    }
+
+    println!("\nTest 4: Custom logic - fail only on specific attempts");
+    let attempt_count = Arc::new(AtomicBool::new(false));
+    let count_clone = attempt_count.clone();
+
+    {
+        let _guard = fallible_core::with_config(
+            fallible_core::FailureConfig::new()
+                .with_probability(1.0)
+                .when(move || {
+                    let prev = count_clone.fetch_xor(true, Ordering::Relaxed);
+                    !prev
+                }),
+        );
+
+        println!("  Alternating pattern (fail on odd calls):");
+        for _ in 0..10 {
+            match read_config() {
+                Ok(_) => print!("."),
+                Err(_) => print!("X"),
             }
         }
         println!();

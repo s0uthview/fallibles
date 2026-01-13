@@ -108,6 +108,7 @@ std::thread_local! {
 }
 
 pub type FailureCallback = Box<dyn Fn(FailurePoint) + Send + Sync>;
+pub type FailurePredicate = Box<dyn Fn() -> bool + Send + Sync>;
 
 pub struct FailureStats {
     pub total_checks: u64,
@@ -123,6 +124,7 @@ pub struct FailureConfig {
     on_failure: Option<FailureCallback>,
     failures_triggered: AtomicU64,
     seed: u64,
+    predicate: Option<FailurePredicate>,
 }
 
 impl FailureConfig {
@@ -136,6 +138,7 @@ impl FailureConfig {
             on_failure: None,
             failures_triggered: AtomicU64::new(0),
             seed: 0,
+            predicate: None,
         }
     }
 
@@ -161,6 +164,7 @@ impl FailureConfig {
             on_failure: None,
             failures_triggered: AtomicU64::new(0),
             seed: 0,
+            predicate: None,
         }
     }
 
@@ -194,6 +198,14 @@ impl FailureConfig {
         self
     }
 
+    pub fn when<F>(mut self, predicate: F) -> Self
+    where
+        F: Fn() -> bool + Send + Sync + 'static,
+    {
+        self.predicate = Some(Box::new(predicate));
+        self
+    }
+
     pub fn on_check<F>(mut self, callback: F) -> Self
     where
         F: Fn(FailurePoint) + Send + Sync + 'static,
@@ -218,6 +230,12 @@ impl FailureConfig {
     }
 
     fn should_trigger(&self, fp_id: FailurePointId) -> bool {
+        if let Some(predicate) = &self.predicate {
+            if !predicate() {
+                return false;
+            }
+        }
+
         if !self.enabled_points.is_empty() && !self.enabled_points.contains(&fp_id) {
             return false;
         }
@@ -238,12 +256,9 @@ impl FailureConfig {
 
             let mut combined = (hash1 as u64) ^ hash2;
 
-            // Mix in entropy source: seed (deterministic) or system (non-deterministic)
             if self.seed != 0 {
-                // Deterministic: use seed for reproducible variation
                 combined ^= self.seed.wrapping_mul(0x517cc1b727220a95);
             } else {
-                // Non-deterministic: use system entropy for true randomness
                 #[cfg(feature = "std")]
                 {
                     use std::time::{SystemTime, UNIX_EPOCH};
