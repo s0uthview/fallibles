@@ -216,8 +216,11 @@ impl FailureConfig {
             let mut bytes = [0u8; 12];
             bytes[0..4].copy_from_slice(&fp_id.0.to_le_bytes());
             bytes[4..12].copy_from_slice(&counter.to_le_bytes());
-            let hash = fxhash::hash32(&bytes);
-            return hash < self.probability;
+            let hash1 = fxhash::hash32(&bytes);
+            let hash2 = fxhash::hash64(&bytes);
+            let combined_hash = (hash1 as u64).wrapping_mul(hash2);
+            let final_hash = (combined_hash >> 32) as u32;
+            return final_hash < self.probability;
         }
 
         false
