@@ -53,9 +53,7 @@ impl FallibleError for eyre::Report {
 }
 
 impl FallibleError for () {
-    fn simulated_failure() -> Self {
-        
-    }
+    fn simulated_failure() -> Self {}
 }
 
 impl FallibleError for bool {
