@@ -9,6 +9,24 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
+/// Trait for error types that can be generated during simulated failures.
+///
+/// Implement this trait for your custom error types to use them with `#[fallible]`.
+/// The trait provides a default error value to return when a failure is triggered.
+///
+/// # Example
+/// ```
+/// use fallible::fallible_core::FallibleError;
+///
+/// #[derive(Debug)]
+/// struct MyError { message: String }
+///
+/// impl FallibleError for MyError {
+///     fn simulated_failure() -> Self {
+///         MyError { message: "test failure".to_string() }
+///     }
+/// }
+/// ```
 pub trait FallibleError {
     fn simulated_failure() -> Self;
 }
@@ -68,13 +86,22 @@ impl<T> FallibleError for Option<T> {
     }
 }
 
+/// Handler trait for custom failure behavior.
+///
+/// This should only be used if you need complete control over
+/// what happens during failures.
 pub trait FailureHandler {
     fn handle(&self, fp: FailurePoint) -> !;
 }
 
+/// Unique identifier for a failure point.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct FailurePointId(pub u32);
 
+/// Information about a specific failure point.
+///
+/// Contains location metadata (file, line, column) and a unique identifier.
+/// This is passed to callbacks for observability and debugging.
 #[derive(Copy, Clone, Debug)]
 pub struct FailurePoint {
     pub id: FailurePointId,
@@ -107,14 +134,47 @@ std::thread_local! {
     static THREAD_CONFIG_PTR: RefCell<usize> = const { RefCell::new(0) };
 }
 
+/// Callback function type for observability hooks.
+///
+/// Used with `on_check()` and `on_failure()` to monitor failures.
 pub type FailureCallback = Box<dyn Fn(FailurePoint) + Send + Sync>;
+
+/// Predicate function type for conditional failure injection.
+///
+/// Used with `when()` to dynamically control if a failure can occur.
 pub type FailurePredicate = Box<dyn Fn() -> bool + Send + Sync>;
 
+/// Statistics about failure behavior.
+///
+/// Tracks how many times failure points were checked and how many failures were triggered.
 pub struct FailureStats {
+    /// Total number of times failure points were evaluated
     pub total_checks: u64,
+    /// Total number of failures that were actually triggered
     pub total_failures: u64,
 }
 
+/// Configuration for failure injection behavior.
+///
+/// Controls when and how failures are triggered. It supports probability-based,
+/// deterministic (every nth call), seeded for reproducible randomness, and includes
+/// preset policies for triggering failures.
+///
+/// # Example
+/// ```
+/// use fallible::fallible_core::FailureConfig;
+///
+/// // Fail 30% of the time
+/// let config = FailureConfig::new().with_probability(0.3);
+///
+/// // Fail every 5th call
+/// let config = FailureConfig::new().trigger_every(5);
+///
+/// // Fail only when condition is true
+/// let config = FailureConfig::new()
+///     .with_probability(1.0)
+///     .when(|| std::env::var("CHAOS_MODE").is_ok());
+/// ```
 pub struct FailureConfig {
     enabled_points: Vec<FailurePointId>,
     probability: u32,
@@ -128,6 +188,9 @@ pub struct FailureConfig {
 }
 
 impl FailureConfig {
+    /// Create a new failure configuration with no failures enabled.
+    ///
+    /// Use builder methods like `with_probability()` or `trigger_every()` to configure behavior.
     pub fn new() -> Self {
         Self {
             enabled_points: Vec::new(),
@@ -142,18 +205,47 @@ impl FailureConfig {
         }
     }
 
+    /// Chaos Monkey policy: 10% random failure rate.
+    ///
+    /// Simulates unpredictable failures for resilience testing.
+    ///
+    /// # Example
+    /// ```
+    /// let config = FailureConfig::chaos_monkey();
+    /// ```
     pub fn chaos_monkey() -> Self {
         Self::new().with_probability(0.1)
     }
 
+    /// Degraded Service policy: custom failure rate.
+    ///
+    /// Simulates a degraded system with specified failure probability.
+    ///
+    /// # Example
+    /// ```
+    /// // 30% of requests fail
+    /// let config = FailureConfig::degraded_service(0.3);
+    /// ```
     pub fn degraded_service(degradation: f64) -> Self {
         Self::new().with_probability(degradation)
     }
 
+    /// Circuit Breaker policy: fail every nth call.
+    ///
+    /// Simulates a circuit breaker that fails periodically.
+    ///
+    /// # Example
+    /// ```
+    /// // Fail every 5th call
+    /// let config = FailureConfig::circuit_breaker(5);
+    /// ```
     pub fn circuit_breaker(failure_threshold: u64) -> Self {
         Self::new().trigger_every(failure_threshold)
     }
 
+    /// Enable all failure points with 100% failure rate.
+    ///
+    /// Useful for testing that all failure points are correctly handled.
     pub fn enable_all() -> Self {
         Self {
             enabled_points: Vec::new(),
@@ -168,26 +260,64 @@ impl FailureConfig {
         }
     }
 
+    /// Enable failures for a specific failure point ID.
+    ///
+    /// When using `enable_point()`, only the specified points will fail.
     pub fn enable_point(mut self, id: FailurePointId) -> Self {
         self.enabled_points.push(id);
         self
     }
 
+    /// Set probability of failure (0.0 to 1.0).
+    ///
+    /// Each failure point check will fail with this probability.
+    ///
+    /// # Example
+    /// ```
+    /// // 25% failure rate
+    /// let config = FailureConfig::new().with_probability(0.25);
+    /// ```
     pub fn with_probability(mut self, prob: f64) -> Self {
         self.probability = (prob * u32::MAX as f64) as u32;
         self
     }
 
+    /// Fail every nth call deterministically.
+    ///
+    /// Creates a predictable failure pattern for testing scenarios.
+    ///
+    /// # Example
+    /// ```
+    /// // Fail on calls 0, 3, 6, 9, ...
+    /// let config = FailureConfig::new().trigger_every(3);
+    /// ```
     pub fn trigger_every(mut self, n: u64) -> Self {
         self.trigger_every = n;
         self
     }
 
+    /// Set a seed for reproducible randomness.
+    ///
+    /// # Example
+    /// ```
+    /// // Same seed always produces same failure pattern
+    /// let config = FailureConfig::new()
+    ///     .with_probability(0.3)
+    ///     .with_seed(12345);
+    /// ```
     pub fn with_seed(mut self, seed: u64) -> Self {
         self.seed = seed;
         self
     }
 
+    /// Set seed from `FALLIBLE_SEED` environment variable.
+    ///
+    /// If the environment variable is not set or invalid, uses default (0).
+    ///
+    /// # Example
+    /// ```bash
+    /// FALLIBLE_SEED=12345 cargo test
+    /// ```
     #[cfg(feature = "std")]
     pub fn with_seed_from_env(mut self) -> Self {
         if let Ok(seed_str) = std::env::var("FALLIBLE_SEED") {
@@ -198,6 +328,17 @@ impl FailureConfig {
         self
     }
 
+    /// Set a predicate that must return true for failures to occur.
+    ///
+    /// Allows control over when failures are enabled based on runtime conditions.
+    ///
+    /// # Example
+    /// ```
+    /// // Only fail when chaos mode is enabled
+    /// let config = FailureConfig::new()
+    ///     .with_probability(0.5)
+    ///     .when(|| std::env::var("CHAOS_MODE").is_ok());
+    /// ```
     pub fn when<F>(mut self, predicate: F) -> Self
     where
         F: Fn() -> bool + Send + Sync + 'static,
@@ -206,6 +347,15 @@ impl FailureConfig {
         self
     }
 
+    /// Register a callback that's called every time a failure point is checked.
+    /// The callback receives information about the failure point being checked.
+    ///
+    /// # Example
+    /// ```
+    /// let config = FailureConfig::new()
+    ///     .with_probability(0.3)
+    ///     .on_check(|fp| println!("Checking: {}:{}", fp.file, fp.line));
+    /// ```
     pub fn on_check<F>(mut self, callback: F) -> Self
     where
         F: Fn(FailurePoint) + Send + Sync + 'static,
@@ -214,6 +364,16 @@ impl FailureConfig {
         self
     }
 
+    /// Register a callback that's called when a failure is actually triggered.
+    ///
+    /// Useful for logging, metrics, or coordinating failures across multiple points.
+    ///
+    /// # Example
+    /// ```
+    /// let config = FailureConfig::new()
+    ///     .with_probability(0.3)
+    ///     .on_failure(|fp| eprintln!("FAILURE at {}:{}", fp.file, fp.line));
+    /// ```
     pub fn on_failure<F>(mut self, callback: F) -> Self
     where
         F: Fn(FailurePoint) + Send + Sync + 'static,
@@ -222,6 +382,15 @@ impl FailureConfig {
         self
     }
 
+    /// Get statistics about failure injection behavior.
+    ///
+    /// Returns total checks and total failures triggered.
+    ///
+    /// # Example
+    /// ```
+    /// let stats = config.stats();
+    /// println!("Failure rate: {}/{}", stats.total_failures, stats.total_checks);
+    /// ```
     pub fn stats(&self) -> FailureStats {
         FailureStats {
             total_checks: self.counter.load(Ordering::Relaxed),
@@ -293,6 +462,10 @@ impl Default for FailureConfig {
     }
 }
 
+/// Set a custom global failure handler.
+///
+/// You should use `configure_failures()` instead unless you need complete control
+/// over failure behavior.
 pub fn set_global_handler<H: FailureHandler + 'static>(handler: H) {
     let handler: Box<dyn FailureHandler> = Box::new(handler);
     let ptr = Box::into_raw(handler);
@@ -303,6 +476,17 @@ pub fn set_global_handler<H: FailureHandler + 'static>(handler: H) {
     GLOBAL_HANDLER_VTABLE.store(parts[1], Ordering::SeqCst);
 }
 
+/// Set global configuration.
+///
+/// This affects all `#[fallible]` functions in your program.
+///
+/// # Example
+/// ```
+/// use fallible::fallible_core::{configure_failures, FailureConfig};
+///
+/// // Enable 30% failure rate globally
+/// configure_failures(FailureConfig::new().with_probability(0.3));
+/// ```
 pub fn configure_failures(config: FailureConfig) {
     let old_ptr = CONFIG_PTR.swap(Box::into_raw(Box::new(config)) as usize, Ordering::SeqCst);
     if old_ptr != 0 {
@@ -312,6 +496,9 @@ pub fn configure_failures(config: FailureConfig) {
     }
 }
 
+/// Clear global configuration.
+///
+/// After calling this, no failures will be injected unless a new config is set.
 pub fn clear_failure_config() {
     let old_ptr = CONFIG_PTR.swap(0, Ordering::SeqCst);
     if old_ptr != 0 {
@@ -321,6 +508,21 @@ pub fn clear_failure_config() {
     }
 }
 
+/// Set thread-local configuration.
+///
+/// This affects only the current thread, allowing independent failure injection
+/// per thread in concurrent tests.
+///
+/// # Example
+/// ```
+/// use fallible::fallible_core::{configure_thread_failures, FailureConfig};
+/// use std::thread;
+///
+/// thread::spawn(|| {
+///     // This config only affects this thread
+///     configure_thread_failures(FailureConfig::new().with_probability(0.5));
+/// });
+/// ```
 #[cfg(feature = "std")]
 pub fn configure_thread_failures(config: FailureConfig) {
     THREAD_CONFIG_PTR.with(|cell| {
@@ -333,6 +535,9 @@ pub fn configure_thread_failures(config: FailureConfig) {
     });
 }
 
+/// Clear thread-local configuration.
+///
+/// After calling this, the thread will fall back to the global configuration.
 #[cfg(feature = "std")]
 pub fn clear_thread_failure_config() {
     THREAD_CONFIG_PTR.with(|cell| {
@@ -345,6 +550,10 @@ pub fn clear_thread_failure_config() {
     });
 }
 
+/// Automatically clears configuration when dropped.
+///
+/// Created by `with_config()` or `with_thread_config()`. Ensures cleanup
+/// even if your code panics.
 #[cfg(feature = "std")]
 pub struct FailureConfigGuard {
     was_global: bool,
@@ -361,18 +570,48 @@ impl Drop for FailureConfigGuard {
     }
 }
 
+/// Set global failure configuration with automatic cleanup.
+///
+/// Returns a guard that clears the configuration when dropped.
+///
+/// # Example
+/// ```
+/// use fallible::fallible_core::{with_config, FailureConfig};
+///
+/// {
+///     let _guard = with_config(FailureConfig::new().with_probability(0.3));
+///     // failures enabled here
+/// } // config automatically cleared
+/// ```
 #[cfg(feature = "std")]
 pub fn with_config(config: FailureConfig) -> FailureConfigGuard {
     configure_failures(config);
     FailureConfigGuard { was_global: true }
 }
 
+/// Set thread-local failure configuration with automatic cleanup.
+///
+/// Returns a guard that clears the configuration when dropped.
+///
+/// # Example
+/// ```
+/// use fallible::fallible_core::{with_thread_config, FailureConfig};
+/// use std::thread;
+///
+/// let handle = thread::spawn(|| {
+///     let _guard = with_thread_config(FailureConfig::new().with_probability(0.5));
+///     // only this thread has failures enabled
+/// });
+/// ```
 #[cfg(feature = "std")]
 pub fn with_thread_config(config: FailureConfig) -> FailureConfigGuard {
     configure_thread_failures(config);
     FailureConfigGuard { was_global: false }
 }
 
+/// Check if a failure should be simulated at this point.
+///
+/// This is called internally by the `#[fallible]` macro.
 #[inline(always)]
 pub fn should_simulate_failure(fp: FailurePoint) -> bool {
     #[cfg(feature = "std")]
@@ -414,6 +653,21 @@ fn check_and_trigger(config: &FailureConfig, fp: FailurePoint) -> bool {
     should_fail
 }
 
+/// Get statistics about the current configuration.
+///
+/// Returns `None` if no configuration is active.
+/// Checks thread-local config first, then falls back to global config.
+///
+/// # Example
+/// ```
+/// use fallible::fallible_core::{configure_failures, get_failure_stats, FailureConfig};
+///
+/// configure_failures(FailureConfig::new().with_probability(0.3));
+/// // ... run some tests ...
+/// if let Some(stats) = get_failure_stats() {
+///     println!("Failures: {}/{}", stats.total_failures, stats.total_checks);
+/// }
+/// ```
 pub fn get_failure_stats() -> Option<FailureStats> {
     #[cfg(feature = "std")]
     {
