@@ -1,5 +1,19 @@
 use fallible::*;
 
+#[derive(Debug, FallibleError)]
+#[fallible(message = "configuration error")]
+struct ConfigError {
+    message: String,
+}
+
+#[derive(Debug, FallibleError)]
+enum NetworkError {
+    #[fallible]
+    Timeout { message: String },
+    ConnectionRefused,
+    InvalidResponse,
+}
+
 #[fallible]
 fn read_config() -> Result<i32, &'static str> {
     Ok(42)
@@ -8,6 +22,16 @@ fn read_config() -> Result<i32, &'static str> {
 #[fallible]
 fn fetch_data() -> Result<&'static str, &'static str> {
     Ok("Hello, Fallible!")
+}
+
+#[fallible]
+fn load_settings() -> Result<String, ConfigError> {
+    Ok("settings loaded".to_string())
+}
+
+#[fallible]
+fn network_request() -> Result<String, NetworkError> {
+    Ok("response data".to_string())
 }
 
 fn main() {
@@ -44,6 +68,26 @@ fn main() {
         match fetch_data() {
             Ok(msg) => println!("Attempt {}: fetch_data succeeded: {msg}", i),
             Err(_) => println!("Attempt {}: fetch_data failed!", i),
+        }
+    }
+
+    println!("\nTesting custom error types:");
+    fallible_core::configure_failures(
+        fallible_core::FailureConfig::new()
+            .with_probability(0.5)
+    );
+
+    for i in 0..5 {
+        match load_settings() {
+            Ok(s) => println!("Attempt {}: load_settings succeeded: {s}", i),
+            Err(e) => println!("Attempt {}: load_settings failed: {:?}", i, e),
+        }
+    }
+
+    for i in 0..5 {
+        match network_request() {
+            Ok(s) => println!("Attempt {}: network_request succeeded: {s}", i),
+            Err(e) => println!("Attempt {}: network_request failed: {:?}", i, e),
         }
     }
 
