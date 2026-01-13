@@ -2,6 +2,12 @@
 name = "fallible"
 version = "0.1.0"
 edition = "2024"
+description = "Failure injection library for testing error handling in Rust"
+license = "MIT"
+repository = "https://github.com/s0uthview/fallible"
+readme = "../README.md"
+keywords = ["testing", "fault-injection", "chaos", "reliability", "errors"]
+categories = ["development-tools::testing", "development-tools::debugging"]
 
 [dependencies]
 fallible-core = { path = "../fallible-core" }
