@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 fallible-core = { path = "../fallible-core" }
 fallible-macro = { path = "../fallible-macro" }
+fxhash = "0.2.1"
 
 [features]
 default = ["fallible-sim"]

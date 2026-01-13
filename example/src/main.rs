@@ -56,6 +56,21 @@ fn boolean_check() -> Result<bool, ()> {
     Ok(true)
 }
 
+#[fallible(probability = 0.2)]
+fn low_probability_fail() -> Result<i32, &'static str> {
+    Ok(100)
+}
+
+#[fallible(trigger_every = 2)]
+fn periodic_fail() -> Result<i32, &'static str> {
+    Ok(200)
+}
+
+#[fallible(enabled = false)]
+fn never_fail() -> Result<i32, &'static str> {
+    Ok(300)
+}
+
 fn main() {
     println!("Without failure injection:");
     match read_config() {
@@ -196,4 +211,29 @@ fn main() {
     }
 
     fallible_core::clear_failure_config();
+
+    println!("\nTesting macro attributes:");
+    println!("low_probability_fail (20% chance):");
+    for i in 0..10 {
+        match low_probability_fail() {
+            Ok(n) => println!("  Attempt {}: succeeded with {}", i, n),
+            Err(_) => println!("  Attempt {}: failed", i),
+        }
+    }
+
+    println!("\nperiodic_fail (every 2nd call):");
+    for i in 0..6 {
+        match periodic_fail() {
+            Ok(n) => println!("  Attempt {}: succeeded with {}", i, n),
+            Err(_) => println!("  Attempt {}: failed", i),
+        }
+    }
+
+    println!("\nnever_fail (disabled):");
+    for i in 0..3 {
+        match never_fail() {
+            Ok(n) => println!("  Attempt {}: succeeded with {}", i, n),
+            Err(_) => println!("  Attempt {}: failed", i),
+        }
+    }
 }

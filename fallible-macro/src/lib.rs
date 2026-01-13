@@ -1,4 +1,4 @@
-use syn::{parse_macro_input, ItemFn, ReturnType, Type, GenericArgument, PathArguments, DeriveInput, Data, Fields, Lit, Meta};
+use syn::{parse_macro_input, ItemFn, ReturnType, Type, GenericArgument, PathArguments, DeriveInput, Data, Fields, Lit, Meta, parse::Parse, Token, Ident, LitFloat, LitInt, LitBool};
 use proc_macro::TokenStream;
 use quote::quote;
 
@@ -21,8 +21,62 @@ fn extract_result_error_type(return_type: &ReturnType) -> Option<&Type> {
     None
 }
 
+struct FallibleAttrs {
+    probability: Option<f64>,
+    trigger_every: Option<u64>,
+    enabled: Option<bool>,
+}
+
+impl Parse for FallibleAttrs {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut attrs = FallibleAttrs {
+            probability: None,
+            trigger_every: None,
+            enabled: None,
+        };
+
+        if input.is_empty() {
+            return Ok(attrs);
+        }
+
+        loop {
+            let key: Ident = input.parse()?;
+            input.parse::<Token![=]>()?;
+
+            match key.to_string().as_str() {
+                "probability" => {
+                    let lit: LitFloat = input.parse()?;
+                    attrs.probability = Some(lit.base10_parse()?);
+                }
+                "trigger_every" => {
+                    let lit: LitInt = input.parse()?;
+                    attrs.trigger_every = Some(lit.base10_parse()?);
+                }
+                "enabled" => {
+                    let lit: LitBool = input.parse()?;
+                    attrs.enabled = Some(lit.value);
+                }
+                _ => {
+                    return Err(syn::Error::new(key.span(), "unknown attribute"));
+                }
+            }
+
+            if input.is_empty() {
+                break;
+            }
+            input.parse::<Token![,]>()?;
+            if input.is_empty() {
+                break;
+            }
+        }
+
+        Ok(attrs)
+    }
+}
+
 #[proc_macro_attribute]
-pub fn fallible(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn fallible(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let attrs = parse_macro_input!(attr as FallibleAttrs);
     let input = parse_macro_input!(item as ItemFn);
 
     let sig = &input.sig;
@@ -35,22 +89,71 @@ pub fn fallible(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let error_type = extract_result_error_type(&sig.output);
 
-    let expanded = if let Some(err_ty) = error_type {
+    let check_logic = if let Some(enabled) = attrs.enabled {
+        if !enabled {
+            return quote! { #vis #sig #block }.into();
+        }
+        quote! {
+            if ::fallible::fallible_core::should_simulate_failure(
+                ::fallible::fallible_core::FailurePoint {
+                    id: ::fallible::fallible_core::FailurePointId(#id_hash),
+                    function: #fn_name,
+                    file: file!(),
+                    line: line!(),
+                    column: column!(),
+                }
+            ) {
+                return Err(<#error_type as ::fallible::fallible_core::FallibleError>::simulated_failure());
+            }
+        }
+    } else if let Some(prob) = attrs.probability {
+        let prob_u32 = (prob * u32::MAX as f64) as u32;
+        let id_bytes = id_hash.to_le_bytes();
+        quote! {
+            {
+                let mut bytes = [0u8; 12];
+                bytes[0..4].copy_from_slice(&[#(#id_bytes),*]);
+                static COUNTER: ::core::sync::atomic::AtomicU64 = ::core::sync::atomic::AtomicU64::new(0);
+                let counter = COUNTER.fetch_add(1, ::core::sync::atomic::Ordering::Relaxed);
+                bytes[4..12].copy_from_slice(&counter.to_le_bytes());
+                let hash = ::fallible::fxhash::hash32(&bytes);
+                if hash < #prob_u32 {
+                    return Err(<#error_type as ::fallible::fallible_core::FallibleError>::simulated_failure());
+                }
+            }
+        }
+    } else if let Some(every) = attrs.trigger_every {
+        quote! {
+            {
+                static COUNTER: ::core::sync::atomic::AtomicU64 = ::core::sync::atomic::AtomicU64::new(0);
+                let count = COUNTER.fetch_add(1, ::core::sync::atomic::Ordering::Relaxed);
+                if count % #every == 0 {
+                    return Err(<#error_type as ::fallible::fallible_core::FallibleError>::simulated_failure());
+                }
+            }
+        }
+    } else {
+        quote! {
+            if ::fallible::fallible_core::should_simulate_failure(
+                ::fallible::fallible_core::FailurePoint {
+                    id: ::fallible::fallible_core::FailurePointId(#id_hash),
+                    function: #fn_name,
+                    file: file!(),
+                    line: line!(),
+                    column: column!(),
+                }
+            ) {
+                return Err(<#error_type as ::fallible::fallible_core::FallibleError>::simulated_failure());
+            }
+        }
+    };
+
+    let expanded = if let Some(_err_ty) = error_type {
         if is_async {
             quote! {
                 #vis #sig {
                     #[cfg(feature = "fallible-sim")]
-                    if ::fallible::fallible_core::should_simulate_failure(
-                        ::fallible::fallible_core::FailurePoint {
-                            id: ::fallible::fallible_core::FailurePointId(#id_hash),
-                            function: #fn_name,
-                            file: file!(),
-                            line: line!(),
-                            column: column!(),
-                        }
-                    ) {
-                        return Err(<#err_ty as ::fallible::fallible_core::FallibleError>::simulated_failure());
-                    }
+                    #check_logic
 
                     let result = async #block;
                     result.await
@@ -60,17 +163,7 @@ pub fn fallible(_attr: TokenStream, item: TokenStream) -> TokenStream {
             quote! {
                 #vis #sig {
                     #[cfg(feature = "fallible-sim")]
-                    if ::fallible::fallible_core::should_simulate_failure(
-                        ::fallible::fallible_core::FailurePoint {
-                            id: ::fallible::fallible_core::FailurePointId(#id_hash),
-                            function: #fn_name,
-                            file: file!(),
-                            line: line!(),
-                            column: column!(),
-                        }
-                    ) {
-                        return Err(<#err_ty as ::fallible::fallible_core::FallibleError>::simulated_failure());
-                    }
+                    #check_logic
 
                     #block
                 }
