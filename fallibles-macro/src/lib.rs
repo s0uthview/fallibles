@@ -228,7 +228,7 @@ pub fn fallible(attr: TokenStream, item: TokenStream) -> TokenStream {
         if is_async {
             quote! {
                 #vis #sig {
-                    #[cfg(feature = "fallible-sim")]
+                    #[cfg(feature = "fallibles-sim")]
                     #check_logic
 
                     let result = async #block;
@@ -238,7 +238,7 @@ pub fn fallible(attr: TokenStream, item: TokenStream) -> TokenStream {
         } else {
             quote! {
                 #vis #sig {
-                    #[cfg(feature = "fallible-sim")]
+                    #[cfg(feature = "fallibles-sim")]
                     #check_logic
 
                     #block
