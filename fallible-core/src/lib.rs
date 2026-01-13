@@ -63,11 +63,21 @@ static GLOBAL_HANDLER_DATA: AtomicUsize = AtomicUsize::new(0);
 static GLOBAL_HANDLER_VTABLE: AtomicUsize = AtomicUsize::new(0);
 static CONFIG_PTR: AtomicUsize = AtomicUsize::new(0);
 
+pub type FailureCallback = Box<dyn Fn(FailurePoint) + Send + Sync>;
+
+pub struct FailureStats {
+    pub total_checks: u64,
+    pub total_failures: u64,
+}
+
 pub struct FailureConfig {
     enabled_points: Vec<FailurePointId>,
     probability: u32,
     counter: AtomicU64,
     trigger_every: u64,
+    on_check: Option<FailureCallback>,
+    on_failure: Option<FailureCallback>,
+    failures_triggered: AtomicU64,
 }
 
 impl FailureConfig {
@@ -77,6 +87,9 @@ impl FailureConfig {
             probability: 0,
             counter: AtomicU64::new(0),
             trigger_every: 0,
+            on_check: None,
+            on_failure: None,
+            failures_triggered: AtomicU64::new(0),
         }
     }
 
@@ -86,6 +99,9 @@ impl FailureConfig {
             probability: u32::MAX,
             counter: AtomicU64::new(0),
             trigger_every: 0,
+            on_check: None,
+            on_failure: None,
+            failures_triggered: AtomicU64::new(0),
         }
     }
 
@@ -102,6 +118,29 @@ impl FailureConfig {
     pub fn trigger_every(mut self, n: u64) -> Self {
         self.trigger_every = n;
         self
+    }
+
+    pub fn on_check<F>(mut self, callback: F) -> Self
+    where
+        F: Fn(FailurePoint) + Send + Sync + 'static,
+    {
+        self.on_check = Some(Box::new(callback));
+        self
+    }
+
+    pub fn on_failure<F>(mut self, callback: F) -> Self
+    where
+        F: Fn(FailurePoint) + Send + Sync + 'static,
+    {
+        self.on_failure = Some(Box::new(callback));
+        self
+    }
+
+    pub fn stats(&self) -> FailureStats {
+        FailureStats {
+            total_checks: self.counter.load(Ordering::Relaxed),
+            total_failures: self.failures_triggered.load(Ordering::Relaxed),
+        }
     }
 
     fn should_trigger(&self, fp_id: FailurePointId) -> bool {
@@ -170,6 +209,32 @@ pub fn should_simulate_failure(fp: FailurePoint) -> bool {
 
     unsafe {
         let config = &*(config_ptr as *const FailureConfig);
-        config.should_trigger(fp.id)
+
+        if let Some(on_check) = &config.on_check {
+            on_check(fp);
+        }
+
+        let should_fail = config.should_trigger(fp.id);
+
+        if should_fail {
+            config.failures_triggered.fetch_add(1, Ordering::Relaxed);
+            if let Some(on_failure) = &config.on_failure {
+                on_failure(fp);
+            }
+        }
+
+        should_fail
+    }
+}
+
+pub fn get_failure_stats() -> Option<FailureStats> {
+    let config_ptr = CONFIG_PTR.load(Ordering::Acquire);
+    if config_ptr == 0 {
+        return None;
+    }
+
+    unsafe {
+        let config = &*(config_ptr as *const FailureConfig);
+        Some(config.stats())
     }
 }

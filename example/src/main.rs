@@ -92,4 +92,35 @@ fn main() {
     }
 
     fallible_core::clear_failure_config();
+
+    println!("\nWith observability:");
+    fallible_core::configure_failures(
+        fallible_core::FailureConfig::new()
+            .with_probability(0.5)
+            .on_check(|fp| {
+                println!("  [CHECK] {} at {}:{}", fp.function, fp.file, fp.line);
+            })
+            .on_failure(|fp| {
+                println!("  [FAILURE TRIGGERED] {} (id: {:?})", fp.function, fp.id);
+            })
+    );
+
+    println!("Testing with callbacks:");
+    for i in 0..3 {
+        println!("Attempt {}:", i);
+        match read_config() {
+            Ok(x) => println!("  Result: succeeded with {}", x),
+            Err(_) => println!("  Result: failed"),
+        }
+    }
+
+    if let Some(stats) = fallible_core::get_failure_stats() {
+        println!("\nStatistics:");
+        println!("  Total checks: {}", stats.total_checks);
+        println!("  Total failures: {}", stats.total_failures);
+        println!("  Failure rate: {:.1}%", 
+            (stats.total_failures as f64 / stats.total_checks as f64) * 100.0);
+    }
+
+    fallible_core::clear_failure_config();
 }
