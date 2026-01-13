@@ -5,9 +5,9 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 pub trait FallibleError {
     fn simulated_failure() -> Self;
@@ -92,11 +92,7 @@ impl FailureHandler for PanicHandler {
     fn handle(&self, fp: FailurePoint) -> ! {
         panic!(
             "fallible simulated failure {:?} at {}:{}:{} ({})",
-            fp.id,
-            fp.file,
-            fp.line,
-            fp.column,
-            fp.function,
+            fp.id, fp.file, fp.line, fp.column, fp.function,
         );
     }
 }
