@@ -73,6 +73,13 @@ fn never_fail() -> Result<i32, &'static str> {
 }
 
 fn main() {
+    test_basic();
+    test_policies();
+    test_thread_config();
+}
+
+fn test_basic() {
+    println!("=== Basic Failure Injection ===\n");
     println!("Without failure injection:");
     match read_config() {
         Ok(x) => println!("read_config succeeded: {x}"),
@@ -228,6 +235,91 @@ fn main() {
         match never_fail() {
             Ok(n) => println!("  Attempt {}: succeeded with {}", i, n),
             Err(_) => println!("  Attempt {}: failed", i),
+        }
+    }
+}
+
+fn test_policies() {
+    println!("\n=== Testing Failure Policies ===\n");
+
+    println!("Chaos Monkey (10% random failures):");
+    {
+        let _guard = fallible_core::with_config(fallible_core::FailureConfig::chaos_monkey());
+        for i in 0..10 {
+            match read_config() {
+                Ok(x) => println!("  Attempt {}: succeeded with {}", i, x),
+                Err(_) => println!("  Attempt {}: failed", i),
+            }
+        }
+    }
+
+    println!("\nDegraded Service (30% failure rate):");
+    {
+        let _guard = fallible_core::with_config(
+            fallible_core::FailureConfig::degraded_service(0.3),
+        );
+        for i in 0..10 {
+            match fetch_data() {
+                Ok(msg) => println!("  Attempt {}: succeeded: {}", i, msg),
+                Err(_) => println!("  Attempt {}: failed", i),
+            }
+        }
+    }
+
+    println!("\nCircuit Breaker (fails every 5th call):");
+    {
+        let _guard =
+            fallible_core::with_config(fallible_core::FailureConfig::circuit_breaker(5));
+        for i in 0..12 {
+            match load_settings() {
+                Ok(s) => println!("  Attempt {}: succeeded: {}", i, s),
+                Err(e) => println!("  Attempt {}: failed: {:?}", i, e),
+            }
+        }
+    }
+
+    println!("\n(All configs automatically cleared via guard)");
+}
+
+fn test_thread_config() {
+    println!("\n=== Testing Per-Thread Configuration ===\n");
+
+    use std::thread;
+
+    let handles: Vec<_> = (0..3)
+        .map(|thread_id| {
+            thread::spawn(move || {
+                let _guard = fallible_core::with_thread_config(
+                    fallible_core::FailureConfig::new()
+                        .with_probability(0.5)
+                        .on_failure(move |fp| {
+                            println!(
+                                "  [Thread {}] Failure triggered in {}",
+                                thread_id, fp.function
+                            );
+                        }),
+                );
+
+                println!("Thread {} starting...", thread_id);
+                for i in 0..5 {
+                    let _ = read_config();
+                    let _ = fetch_data();
+                    thread::sleep(std::time::Duration::from_millis(10));
+                }
+                println!("Thread {} completed", thread_id);
+            })
+        })
+        .collect();
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    println!("\nMain thread (no config):");
+    for i in 0..3 {
+        match read_config() {
+            Ok(x) => println!("  Main attempt {}: succeeded with {}", i, x),
+            Err(_) => println!("  Main attempt {}: failed", i),
         }
     }
 }

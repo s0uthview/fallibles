@@ -101,6 +101,14 @@ static GLOBAL_HANDLER_DATA: AtomicUsize = AtomicUsize::new(0);
 static GLOBAL_HANDLER_VTABLE: AtomicUsize = AtomicUsize::new(0);
 static CONFIG_PTR: AtomicUsize = AtomicUsize::new(0);
 
+#[cfg(feature = "std")]
+use std::cell::RefCell;
+
+#[cfg(feature = "std")]
+std::thread_local! {
+    static THREAD_CONFIG_PTR: RefCell<usize> = const { RefCell::new(0) };
+}
+
 pub type FailureCallback = Box<dyn Fn(FailurePoint) + Send + Sync>;
 
 pub struct FailureStats {
@@ -129,6 +137,18 @@ impl FailureConfig {
             on_failure: None,
             failures_triggered: AtomicU64::new(0),
         }
+    }
+
+    pub fn chaos_monkey() -> Self {
+        Self::new().with_probability(0.1)
+    }
+
+    pub fn degraded_service(degradation: f64) -> Self {
+        Self::new().with_probability(degradation)
+    }
+
+    pub fn circuit_breaker(failure_threshold: u64) -> Self {
+        Self::new().trigger_every(failure_threshold)
     }
 
     pub fn enable_all() -> Self {
@@ -238,8 +258,71 @@ pub fn clear_failure_config() {
     }
 }
 
+#[cfg(feature = "std")]
+pub fn configure_thread_failures(config: FailureConfig) {
+    THREAD_CONFIG_PTR.with(|cell| {
+        let old_ptr = cell.replace(Box::into_raw(Box::new(config)) as usize);
+        if old_ptr != 0 {
+            unsafe {
+                drop(Box::from_raw(old_ptr as *mut FailureConfig));
+            }
+        }
+    });
+}
+
+#[cfg(feature = "std")]
+pub fn clear_thread_failure_config() {
+    THREAD_CONFIG_PTR.with(|cell| {
+        let old_ptr = cell.replace(0);
+        if old_ptr != 0 {
+            unsafe {
+                drop(Box::from_raw(old_ptr as *mut FailureConfig));
+            }
+        }
+    });
+}
+
+#[cfg(feature = "std")]
+pub struct FailureConfigGuard {
+    was_global: bool,
+}
+
+#[cfg(feature = "std")]
+impl Drop for FailureConfigGuard {
+    fn drop(&mut self) {
+        if self.was_global {
+            clear_failure_config();
+        } else {
+            clear_thread_failure_config();
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+pub fn with_config(config: FailureConfig) -> FailureConfigGuard {
+    configure_failures(config);
+    FailureConfigGuard { was_global: true }
+}
+
+#[cfg(feature = "std")]
+pub fn with_thread_config(config: FailureConfig) -> FailureConfigGuard {
+    configure_thread_failures(config);
+    FailureConfigGuard { was_global: false }
+}
+
 #[inline(always)]
 pub fn should_simulate_failure(fp: FailurePoint) -> bool {
+    #[cfg(feature = "std")]
+    {
+        let thread_ptr = THREAD_CONFIG_PTR.with(|cell| *cell.borrow());
+        if thread_ptr != 0 {
+            return unsafe {
+                let config = &*(thread_ptr as *const FailureConfig);
+                check_and_trigger(config, fp)
+            };
+        }
+    }
+
     let config_ptr = CONFIG_PTR.load(Ordering::Acquire);
     if config_ptr == 0 {
         return false;
@@ -247,25 +330,39 @@ pub fn should_simulate_failure(fp: FailurePoint) -> bool {
 
     unsafe {
         let config = &*(config_ptr as *const FailureConfig);
-
-        if let Some(on_check) = &config.on_check {
-            on_check(fp);
-        }
-
-        let should_fail = config.should_trigger(fp.id);
-
-        if should_fail {
-            config.failures_triggered.fetch_add(1, Ordering::Relaxed);
-            if let Some(on_failure) = &config.on_failure {
-                on_failure(fp);
-            }
-        }
-
-        should_fail
+        check_and_trigger(config, fp)
     }
 }
 
+fn check_and_trigger(config: &FailureConfig, fp: FailurePoint) -> bool {
+    if let Some(on_check) = &config.on_check {
+        on_check(fp);
+    }
+
+    let should_fail = config.should_trigger(fp.id);
+
+    if should_fail {
+        config.failures_triggered.fetch_add(1, Ordering::Relaxed);
+        if let Some(on_failure) = &config.on_failure {
+            on_failure(fp);
+        }
+    }
+
+    should_fail
+}
+
 pub fn get_failure_stats() -> Option<FailureStats> {
+    #[cfg(feature = "std")]
+    {
+        let thread_ptr = THREAD_CONFIG_PTR.with(|cell| *cell.borrow());
+        if thread_ptr != 0 {
+            return unsafe {
+                let config = &*(thread_ptr as *const FailureConfig);
+                Some(config.stats())
+            };
+        }
+    }
+
     let config_ptr = CONFIG_PTR.load(Ordering::Acquire);
     if config_ptr == 0 {
         return None;
