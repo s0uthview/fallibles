@@ -95,7 +95,7 @@ impl Parse for FallibleAttrs {
 ///
 /// Basic usage:
 /// ```rust
-/// use fallible::fallible;
+/// use fallibles::fallible;
 ///
 /// #[fallible]
 /// fn risky_operation() -> Result<String, &'static str> {
@@ -146,16 +146,16 @@ pub fn fallible(attr: TokenStream, item: TokenStream) -> TokenStream {
             return quote! { #vis #sig #block }.into();
         }
         quote! {
-            if ::fallible::fallible_core::should_simulate_failure(
-                ::fallible::fallible_core::FailurePoint {
-                    id: ::fallible::fallible_core::FailurePointId(#id_hash),
+            if ::fallibles::fallibles_core::should_simulate_failure(
+                ::fallibles::fallibles_core::FailurePoint {
+                    id: ::fallibles::fallibles_core::FailurePointId(#id_hash),
                     function: #fn_name,
                     file: file!(),
                     line: line!(),
                     column: column!(),
                 }
             ) {
-                return Err(<#error_type as ::fallible::fallible_core::FallibleError>::simulated_failure());
+                return Err(<#error_type as ::fallibles::fallibles_core::FallibleError>::simulated_failure());
             }
         }
     } else if let Some(prob) = attrs.probability {
@@ -169,8 +169,8 @@ pub fn fallible(attr: TokenStream, item: TokenStream) -> TokenStream {
                 let counter = COUNTER.fetch_add(1, ::core::sync::atomic::Ordering::Relaxed);
                 bytes[4..12].copy_from_slice(&counter.to_le_bytes());
 
-                let hash1 = ::fallible::fxhash::hash32(&bytes);
-                let hash2 = ::fallible::fxhash::hash64(&bytes);
+                let hash1 = ::fallibles::fxhash::hash32(&bytes);
+                let hash2 = ::fallibles::fxhash::hash64(&bytes);
 
                 let mut combined = (hash1 as u64) ^ hash2;
 
@@ -181,7 +181,7 @@ pub fn fallible(attr: TokenStream, item: TokenStream) -> TokenStream {
                         .map(|d| d.as_nanos() as u64)
                         .unwrap_or(0);
                     let thread_id = ::std::thread::current().id();
-                    let thread_hash = ::fallible::fxhash::hash64(&::std::format!("{:?}", thread_id).as_bytes());
+                    let thread_hash = ::fallibles::fxhash::hash64(&::std::format!("{:?}", thread_id).as_bytes());
                     let stack_addr = &nanos as *const _ as usize as u64;
                     combined ^= nanos.wrapping_add(stack_addr).wrapping_mul(thread_hash);
                 }
@@ -194,7 +194,7 @@ pub fn fallible(attr: TokenStream, item: TokenStream) -> TokenStream {
 
                 let threshold = ((#prob_u32 as u64) << 32) | #prob_u32 as u64;
                 if combined < threshold {
-                    return Err(<#error_type as ::fallible::fallible_core::FallibleError>::simulated_failure());
+                    return Err(<#error_type as ::fallibles::fallibles_core::FallibleError>::simulated_failure());
                 }
             }
         }
@@ -204,22 +204,22 @@ pub fn fallible(attr: TokenStream, item: TokenStream) -> TokenStream {
                 static COUNTER: ::core::sync::atomic::AtomicU64 = ::core::sync::atomic::AtomicU64::new(0);
                 let count = COUNTER.fetch_add(1, ::core::sync::atomic::Ordering::Relaxed);
                 if count % #every == 0 {
-                    return Err(<#error_type as ::fallible::fallible_core::FallibleError>::simulated_failure());
+                    return Err(<#error_type as ::fallibles::fallibles_core::FallibleError>::simulated_failure());
                 }
             }
         }
     } else {
         quote! {
-            if ::fallible::fallible_core::should_simulate_failure(
-                ::fallible::fallible_core::FailurePoint {
-                    id: ::fallible::fallible_core::FailurePointId(#id_hash),
+            if ::fallibles::fallibles_core::should_simulate_failure(
+                ::fallibles::fallibles_core::FailurePoint {
+                    id: ::fallibles::fallibles_core::FailurePointId(#id_hash),
                     function: #fn_name,
                     file: file!(),
                     line: line!(),
                     column: column!(),
                 }
             ) {
-                return Err(<#error_type as ::fallible::fallible_core::FallibleError>::simulated_failure());
+                return Err(<#error_type as ::fallibles::fallibles_core::FallibleError>::simulated_failure());
             }
         }
     };
@@ -267,7 +267,7 @@ pub fn fallible(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// Simple struct:
 /// ```rust
-/// use fallible::FallibleError;
+/// use fallibles::FallibleError;
 ///
 /// #[derive(Debug, FallibleError)]
 /// #[fallible(message = "config error")]
@@ -378,7 +378,7 @@ pub fn derive_fallible_error(input: TokenStream) -> TokenStream {
     };
 
     let expanded = quote! {
-        impl #impl_generics ::fallible::fallible_core::FallibleError for #name #ty_generics #where_clause {
+        impl #impl_generics ::fallibles::fallibles_core::FallibleError for #name #ty_generics #where_clause {
             fn simulated_failure() -> Self {
                 #error_expr
             }

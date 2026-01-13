@@ -25,16 +25,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "fallible"
-version = "1.0.0"
+name = "fallibles"
+version = "0.1.0"
 dependencies = [
- "fallible-core",
- "fallible-macro",
+ "fallibles-core",
+ "fallibles-macro",
  "fxhash",
 ]
 
 [[package]]
-name = "fallible-core"
+name = "fallibles-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -43,10 +43,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "fallible-macro"
+name = "fallibles-macro"
 version = "0.1.0"
 dependencies = [
- "fallible-core",
+ "fallibles-core",
  "fxhash",
  "proc-macro2",
  "quote",

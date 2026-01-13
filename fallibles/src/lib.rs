@@ -7,7 +7,7 @@
 //! # Quick Start
 //!
 //! ```rust
-//! use fallible::*;
+//! use fallibles::*;
 //!
 //! #[fallible]
 //! fn database_query() -> Result<String, &'static str> {
@@ -15,8 +15,8 @@
 //! }
 //!
 //! // Enable 30% failure rate
-//! fallible_core::configure_failures(
-//!     fallible_core::FailureConfig::new().with_probability(0.3)
+//! fallibles_core::configure_failures(
+//!     fallibles_core::FailureConfig::new().with_probability(0.3)
 //! );
 //! ```
 //!
@@ -25,7 +25,7 @@
 //! ## Basic Usage
 //!
 //! ```rust
-//! use fallible::*;
+//! use fallibles::*;
 //!
 //! #[fallible]
 //! fn read_config() -> Result<i32, &'static str> {
@@ -37,8 +37,8 @@
 //!
 //! // Enable failures with RAII guard
 //! {
-//!     let _guard = fallible_core::with_config(
-//!         fallible_core::FailureConfig::new().with_probability(1.0)
+//!     let _guard = fallibles_core::with_config(
+//!         fallibles_core::FailureConfig::new().with_probability(1.0)
 //!     );
 //!     // Now it will fail
 //!     assert!(read_config().is_err());
@@ -48,7 +48,7 @@
 //! ## Inline Configuration
 //!
 //! ```rust
-//! use fallible::*;
+//! use fallibles::*;
 //!
 //! #[fallible(probability = 0.2)]  // 20% failure rate
 //! fn flaky_api() -> Result<String, &'static str> {
@@ -64,7 +64,7 @@
 //! ## Policy-Based Testing
 //!
 //! ```rust
-//! use fallible::fallible_core::{FailureConfig, with_config};
+//! use fallibles::fallibles_core::{FailureConfig, with_config};
 //!
 //! // Chaos Monkey: 10% random failures
 //! let _guard = with_config(FailureConfig::chaos_monkey());
@@ -79,7 +79,7 @@
 //! ## Conditional Failures
 //!
 //! ```rust
-//! use fallible::fallible_core::{FailureConfig, with_config};
+//! use fallibles::fallibles_core::{FailureConfig, with_config};
 //!
 //! // Only fail when environment variable is set
 //! let _guard = with_config(
@@ -92,7 +92,7 @@
 //! ## Reproducible Testing
 //!
 //! ```rust
-//! use fallible::fallible_core::{FailureConfig, with_config};
+//! use fallibles::fallibles_core::{FailureConfig, with_config};
 //!
 //! // Same seed always produces same failure pattern
 //! let _guard = with_config(
@@ -106,7 +106,7 @@
 //! ## Custom Error Types
 //!
 //! ```rust
-//! use fallible::*;
+//! use fallibles::*;
 //!
 //! #[derive(Debug, FallibleError)]
 //! #[fallible(message = "timeout occurred")]
@@ -127,8 +127,8 @@
 //! - `anyhow` - Support for anyhow::Error
 //! - `eyre` - Support for eyre::Report
 
-pub use fallible_core::*;
-pub use fallible_macro::*;
+pub use fallibles_core::*;
+pub use fallibles_macro::*;
 
-pub extern crate fallible_core as fallible_core;
+pub extern crate fallibles_core;
 pub extern crate fxhash;

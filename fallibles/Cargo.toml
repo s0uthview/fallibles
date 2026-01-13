@@ -1,6 +1,6 @@
 [package]
-name = "fallible"
-version = "1.0.0"
+name = "fallibles"
+version = "0.1.0"
 edition = "2024"
 description = "Failure injection library for testing error handling in Rust"
 license = "MIT"
@@ -10,13 +10,12 @@ keywords = ["testing", "fault-injection", "chaos", "reliability", "errors"]
 categories = ["development-tools::testing", "development-tools::debugging"]
 
 [dependencies]
-fallible-core = { version = "0.1.0", path = "../fallible-core" }
-fallible-macro = { version = "0.1.0", path = "../fallible-macro" }
+fallibles-core = { version = "0.1.0", path = "../fallibles-core" }
+fallibles-macro = { version = "0.1.0", path = "../fallibles-macro" }
 fxhash = "0.2.1"
 
 [features]
-default = ["fallible-sim", "std"]
-fallible-sim = []
-std = ["fallible-core/std"]
-anyhow = ["fallible-core/anyhow"]
-eyre = ["fallible-core/eyre"]
+default = ["fallibles-sim", "std"]
+fallibles-sim = []
+std = ["fallibles-core/std"]
+anyhow = ["fallibles-core/anyhow"]

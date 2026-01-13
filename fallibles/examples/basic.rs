@@ -1,4 +1,4 @@
-use fallible::*;
+use fallibles::*;
 
 /// simple function that could fail
 #[fallible]
@@ -29,8 +29,8 @@ fn main() {
     }
 
     println!("\n2. 50% failure probability:");
-    fallible_core::configure_failures(
-        fallible_core::FailureConfig::new().with_probability(0.5),
+    fallibles_core::configure_failures(
+        fallibles_core::FailureConfig::new().with_probability(0.5),
     );
 
     for i in 0..10 {
@@ -47,7 +47,7 @@ fn main() {
     println!("\n3. using RAII guard with chaos monkey:");
 
     {
-        let _guard = fallible_core::with_config(fallible_core::FailureConfig::chaos_monkey());
+        let _guard = fallibles_core::with_config(fallibles_core::FailureConfig::chaos_monkey());
         for i in 0..20 {
             match read_config() {
                 Ok(_) => print!("."),
@@ -82,8 +82,8 @@ fn main() {
 
     println!("\n6. seeded (seed = 99999):");
     {
-        let _guard = fallible_core::with_config(
-            fallible_core::FailureConfig::new()
+        let _guard = fallibles_core::with_config(
+            fallibles_core::FailureConfig::new()
                 .with_probability(0.25)
                 .with_seed(99999),
         );
@@ -107,8 +107,8 @@ fn main() {
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();
 
-        let _guard = fallible_core::with_config(
-            fallible_core::FailureConfig::new()
+        let _guard = fallibles_core::with_config(
+            fallibles_core::FailureConfig::new()
                 .with_probability(1.0)
                 .when(move || counter_clone.load(Ordering::Relaxed) > 5),
         );
@@ -124,8 +124,8 @@ fn main() {
 
     println!("\n8. with callback for logging:");
     {
-        let _guard = fallible_core::with_config(
-            fallible_core::FailureConfig::new()
+        let _guard = fallibles_core::with_config(
+            fallibles_core::FailureConfig::new()
                 .with_probability(0.5)
                 .on_failure(|fp| {
                     eprintln!(

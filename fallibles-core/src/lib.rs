@@ -19,7 +19,7 @@ use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 ///
 /// # Example
 /// ```
-/// use fallible::fallible_core::FallibleError;
+/// use fallibles::fallibles_core::FallibleError;
 ///
 /// #[derive(Debug)]
 /// struct MyError { message: String }
@@ -165,7 +165,7 @@ pub struct FailureStats {
 ///
 /// # Example
 /// ```
-/// use fallible::fallible_core::FailureConfig;
+/// use fallibles::fallibles_core::FailureConfig;
 ///
 /// // Fail 30% of the time
 /// let config = FailureConfig::new().with_probability(0.3);
@@ -484,7 +484,7 @@ pub fn set_global_handler<H: FailureHandler + 'static>(handler: H) {
 ///
 /// # Example
 /// ```
-/// use fallible::fallible_core::{configure_failures, FailureConfig};
+/// use fallibles::fallibles_core::{configure_failures, FailureConfig};
 ///
 /// // Enable 30% failure rate globally
 /// configure_failures(FailureConfig::new().with_probability(0.3));
@@ -517,7 +517,7 @@ pub fn clear_failure_config() {
 ///
 /// # Example
 /// ```
-/// use fallible::fallible_core::{configure_thread_failures, FailureConfig};
+/// use fallibles::fallibles_core::{configure_thread_failures, FailureConfig};
 /// use std::thread;
 ///
 /// thread::spawn(|| {
@@ -578,7 +578,7 @@ impl Drop for FailureConfigGuard {
 ///
 /// # Example
 /// ```
-/// use fallible::fallible_core::{with_config, FailureConfig};
+/// use fallibles::fallibles_core::{with_config, FailureConfig};
 ///
 /// {
 ///     let _guard = with_config(FailureConfig::new().with_probability(0.3));
@@ -597,7 +597,7 @@ pub fn with_config(config: FailureConfig) -> FailureConfigGuard {
 ///
 /// # Example
 /// ```
-/// use fallible::fallible_core::{with_thread_config, FailureConfig};
+/// use fallibles::fallibles_core::{with_thread_config, FailureConfig};
 /// use std::thread;
 ///
 /// let handle = thread::spawn(|| {
@@ -662,7 +662,7 @@ fn check_and_trigger(config: &FailureConfig, fp: FailurePoint) -> bool {
 ///
 /// # Example
 /// ```
-/// use fallible::fallible_core::{configure_failures, get_failure_stats, FailureConfig};
+/// use fallibles::fallibles_core::{configure_failures, get_failure_stats, FailureConfig};
 ///
 /// configure_failures(FailureConfig::new().with_probability(0.3));
 /// // ... run some tests ...

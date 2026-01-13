@@ -1,5 +1,5 @@
 [package]
-name = "fallible-macro"
+name = "fallibles-macro"
 version = "0.1.0"
 edition = "2024"
 description = "Failure injection library for testing error handling in Rust"
@@ -14,4 +14,4 @@ fxhash = "0.2.1"
 proc-macro2 = "1.0.105"
 quote = "1.0.43"
 syn = { version = "2.0.114", features = ["full"] }
-fallible-core = { version = "0.1.0", path = "../fallible-core" }
+fallibles-core = { version = "0.1.0", path = "../fallibles-core" }
