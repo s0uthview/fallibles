@@ -1,4 +1,4 @@
-//! # fallible-macro
+//! # fallibles-macro
 //!
 //! This crate provides the `#[fallible]` attribute macro and `#[derive(FallibleError)]`
 //! for fault injection in Rust functions.

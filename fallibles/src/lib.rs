@@ -1,6 +1,6 @@
-//! # fallible
+//! # fallibles
 //!
-//! Fallible enables controlled failure injection for testing error handling in Rust applications.
+//! Fallibles enables controlled failure injection for testing error handling in Rust applications.
 //! Mark functions with `#[fallible]` and configure when they should fail for comprehensive
 //! testing.
 //!

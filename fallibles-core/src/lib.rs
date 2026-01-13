@@ -1,4 +1,4 @@
-//! # fallible-core
+//! # fallibles-core
 //! This module contains the core logic for failure injection and configuration.
 
 #![no_std]

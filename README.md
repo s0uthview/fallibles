@@ -1,10 +1,10 @@
-# fallible
-Fallible enables controlled failure injection for testing error handling in Rust applications.
+# fallibles
+Fallibles enables controlled failure injection for testing error handling in Rust applications.
 Mark functions with `#[fallible]` and configure when they should fail for comprehensive testing.
 
 # Features
 
-- `fallible-sim` - Enable failure injection (required)
+- `fallibles-sim` - Enable failure injection (required)
 - `std` - Standard library support (default)
 - `anyhow` - Support for anyhow::Error
 - `eyre` - Support for eyre::Report
@@ -12,7 +12,7 @@ Mark functions with `#[fallible]` and configure when they should fail for compre
 # Quick Start
 
 ```rust
-use fallible::*;
+use fallibles::*;
 
 #[fallible]
 fn database_query() -> Result<String, &'static str> {
@@ -20,8 +20,8 @@ fn database_query() -> Result<String, &'static str> {
 }
 
 // Enable 30% failure rate
-fallible_core::configure_failures(
-    fallible_core::FailureConfig::new().with_probability(0.3)
+fallibles_core::configure_failures(
+    fallibles_core::FailureConfig::new().with_probability(0.3)
 );
 ```
 
@@ -30,7 +30,7 @@ fallible_core::configure_failures(
 ## Basic Usage
 
 ```rust
-use fallible::*;
+use fallibles::*;
 
 #[fallible]
 fn read_config() -> Result<i32, &'static str> {
@@ -42,8 +42,8 @@ assert_eq!(read_config().unwrap(), 42);
 
 // Enable failures with RAII guard
 {
-    let _guard = fallible_core::with_config(
-        fallible_core::FailureConfig::new().with_probability(1.0)
+    let _guard = fallibles_core::with_config(
+        fallibles_core::FailureConfig::new().with_probability(1.0)
     );
     // Now it will fail
     assert!(read_config().is_err());
@@ -53,7 +53,7 @@ assert_eq!(read_config().unwrap(), 42);
 ## Inline Configuration
 
 ```rust
-use fallible::*;
+use fallibles::*;
 
 #[fallible(probability = 0.2)]  // 20% failure rate
 fn flaky_api() -> Result<String, &'static str> {
@@ -69,7 +69,7 @@ fn periodic_task() -> Result<(), String> {
 ## Policy-Based Testing
 
 ```rust
-use fallible::fallible_core::{FailureConfig, with_config};
+use fallibles::fallibles_core::{FailureConfig, with_config};
 
 // Chaos Monkey: 10% random failures
 let _guard = with_config(FailureConfig::chaos_monkey());
@@ -84,7 +84,7 @@ let _guard = with_config(FailureConfig::circuit_breaker(5));
 ## Conditional Failures
 
 ```rust
-use fallible::fallible_core::{FailureConfig, with_config};
+use fallibles::fallibles_core::{FailureConfig, with_config};
 
 // Only fail when environment variable is set
 let _guard = with_config(
@@ -97,7 +97,7 @@ let _guard = with_config(
 ## Reproducible Testing
 
 ```rust
-use fallible::fallible_core::{FailureConfig, with_config};
+use fallibles::fallibles_core::{FailureConfig, with_config};
 
 // Same seed always produces same failure pattern
 let _guard = with_config(
@@ -105,13 +105,13 @@ let _guard = with_config(
         .with_probability(0.3)
         .with_seed(12345)
 );
-// Or from environment: FALLIBLE_SEED=12345 cargo test
+// Or from environment: FALLIBLES_SEED=12345 cargo test
 ```
 
 ## Custom Error Types
 
 ```rust
-use fallible::*;
+use fallibles::*;
 
 #[derive(Debug, FallibleError)]
 #[fallible(message = "timeout occurred")]
