@@ -5,7 +5,6 @@ edition = "2024"
 description = "Failure injection library for testing error handling in Rust"
 license = "MIT"
 repository = "https://github.com/s0uthview/fallible"
-publish = false
 
 [lib]
 proc-macro = true
@@ -15,4 +14,4 @@ fxhash = "0.2.1"
 proc-macro2 = "1.0.105"
 quote = "1.0.43"
 syn = { version = "2.0.114", features = ["full"] }
-fallible-core = { path = "../fallible-core" }
+fallible-core = { version = "0.1.0", path = "../fallible-core" }

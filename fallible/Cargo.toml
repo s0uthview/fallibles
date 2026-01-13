@@ -10,8 +10,8 @@ keywords = ["testing", "fault-injection", "chaos", "reliability", "errors"]
 categories = ["development-tools::testing", "development-tools::debugging"]
 
 [dependencies]
-fallible-core = { path = "../fallible-core" }
-fallible-macro = { path = "../fallible-macro" }
+fallible-core = { version = "0.1.0", path = "../fallible-core" }
+fallible-macro = { version = "0.1.0", path = "../fallible-macro" }
 fxhash = "0.2.1"
 
 [features]

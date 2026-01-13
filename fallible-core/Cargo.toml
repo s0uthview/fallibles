@@ -5,7 +5,6 @@ edition = "2024"
 description = "Failure injection library for testing error handling in Rust"
 license = "MIT"
 repository = "https://github.com/s0uthview/fallible"
-publish = false
 
 [dependencies]
 fxhash = "0.2.1"
