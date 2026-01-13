@@ -30,7 +30,7 @@ fn load_settings() -> Result<String, ConfigError> {
 }
 
 #[fallible]
-fn network_request() -> Result<String, NetworkError> {
+async fn network_request() -> Result<String, NetworkError> {
     Ok("response data".to_string())
 }
 
@@ -84,13 +84,6 @@ fn main() {
         }
     }
 
-    for i in 0..5 {
-        match network_request() {
-            Ok(s) => println!("Attempt {}: network_request succeeded: {s}", i),
-            Err(e) => println!("Attempt {}: network_request failed: {:?}", i, e),
-        }
-    }
-
     fallible_core::clear_failure_config();
 
     println!("\nWith observability:");
@@ -123,4 +116,25 @@ fn main() {
     }
 
     fallible_core::clear_failure_config();
+
+    println!("\nTesting async functions:");
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            fallible_core::configure_failures(
+                fallible_core::FailureConfig::new()
+                    .with_probability(0.5)
+            );
+
+            for i in 0..5 {
+                match network_request().await {
+                    Ok(s) => println!("Attempt {}: async network_request succeeded: {s}", i),
+                    Err(e) => println!("Attempt {}: async network_request failed: {:?}", i, e),
+                }
+            }
+
+            fallible_core::clear_failure_config();
+        });
 }

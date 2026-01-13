@@ -28,6 +28,7 @@ pub fn fallible(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let sig = &input.sig;
     let block = &input.block;
     let vis = &input.vis;
+    let is_async = sig.asyncness.is_some();
 
     let fn_name = sig.ident.to_string();
     let id_hash = fxhash::hash32(fn_name.as_bytes());
@@ -35,22 +36,44 @@ pub fn fallible(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let error_type = extract_result_error_type(&sig.output);
 
     let expanded = if let Some(err_ty) = error_type {
-        quote! {
-            #vis #sig {
-                #[cfg(feature = "fallible-sim")]
-                if ::fallible::fallible_core::should_simulate_failure(
-                    ::fallible::fallible_core::FailurePoint {
-                        id: ::fallible::fallible_core::FailurePointId(#id_hash),
-                        function: #fn_name,
-                        file: file!(),
-                        line: line!(),
-                        column: column!(),
+        if is_async {
+            quote! {
+                #vis #sig {
+                    #[cfg(feature = "fallible-sim")]
+                    if ::fallible::fallible_core::should_simulate_failure(
+                        ::fallible::fallible_core::FailurePoint {
+                            id: ::fallible::fallible_core::FailurePointId(#id_hash),
+                            function: #fn_name,
+                            file: file!(),
+                            line: line!(),
+                            column: column!(),
+                        }
+                    ) {
+                        return Err(<#err_ty as ::fallible::fallible_core::FallibleError>::simulated_failure());
                     }
-                ) {
-                    return Err(<#err_ty as ::fallible::fallible_core::FallibleError>::simulated_failure());
-                }
 
-                #block
+                    let result = async #block;
+                    result.await
+                }
+            }
+        } else {
+            quote! {
+                #vis #sig {
+                    #[cfg(feature = "fallible-sim")]
+                    if ::fallible::fallible_core::should_simulate_failure(
+                        ::fallible::fallible_core::FailurePoint {
+                            id: ::fallible::fallible_core::FailurePointId(#id_hash),
+                            function: #fn_name,
+                            file: file!(),
+                            line: line!(),
+                            column: column!(),
+                        }
+                    ) {
+                        return Err(<#err_ty as ::fallible::fallible_core::FallibleError>::simulated_failure());
+                    }
+
+                    #block
+                }
             }
         }
     } else {
